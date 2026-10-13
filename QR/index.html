@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Code Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#111; --muted:#6b7280; --accent:#2563eb; --border:#d1d5db; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --card:#1a1d24; --text:#f3f4f6; --muted:#9ca3af; --accent:#3b82f6; --border:#374151; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding:16px; }
+  .card { width:100%; max-width:420px; background:var(--card); border-radius:16px; padding:24px;
+          box-shadow:0 4px 24px rgba(0,0,0,.08); }
+  h1 { font-size:1.3rem; margin:0 0 4px; }
+  p.sub { margin:0 0 18px; color:var(--muted); font-size:.9rem; }
+  input[type=text] { width:100%; padding:14px; font-size:1.05rem; border:1px solid var(--border); border-radius:10px;
+         background:transparent; color:var(--text); }
+  input[type=text]:focus { outline:2px solid var(--accent); border-color:transparent; }
+  button { width:100%; margin-top:12px; padding:14px; font-size:1rem; font-weight:600; border:0; border-radius:10px;
+           background:var(--accent); color:#fff; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  #result { display:none; margin-top:20px; text-align:center; }
+  #preview { width:100%; max-width:320px; height:auto; aspect-ratio:1/1; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); }
+  #label { margin-top:8px; font-family:ui-monospace,Menlo,monospace; word-break:break-all; color:var(--muted); font-size:.9rem; }
+  #err { color:#dc2626; margin-top:10px; font-size:.9rem; display:none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>QR Code Generator</h1>
+  <p class="sub">Enter a serial number. The QR image downloads automatically.</p>
+  <form id="f" autocomplete="off">
+    <input type="text" id="serial" placeholder="e.g. DN123B12" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+    <button type="submit">Generate QR</button>
+  </form>
+  <div id="err"></div>
+  <div id="result">
+    <img id="preview" alt="QR code">
+    <div id="label"></div>
+    <button type="button" class="secondary" id="dl">Download again</button>
+  </div>
+</div>
+
+<script>
+  var SIZE_TARGET = 1024;           // approx. output size in px (always square, 1:1)
+  var form = document.getElementById('f');
+  var input = document.getElementById('serial');
+  var result = document.getElementById('result');
+  var preview = document.getElementById('preview');
+  var label = document.getElementById('label');
+  var err = document.getElementById('err');
+  var current = { url: null, name: null };
+
+  // Accept letters, digits and special characters (UTF-8 safe)
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+
+  function safeFileName(s) {
+    return s.replace(/[\\\/:*?"<>|\s]+/g, '_').replace(/^\.+/, '') || 'QR';
+  }
+
+  function makeQR(text) {
+    var qr = qrcode(0, 'M');        // auto version, medium error correction
+    qr.addData(text, 'Byte');
+    qr.make();
+    var n = qr.getModuleCount();
+    var quiet = 4;                  // standard quiet zone
+    var cell = Math.max(4, Math.floor(SIZE_TARGET / (n + quiet * 2)));
+    var size = cell * (n + quiet * 2);
+    var c = document.createElement('canvas');
+    c.width = c.height = size;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#000';
+    for (var r = 0; r < n; r++)
+      for (var col = 0; col < n; col++)
+        if (qr.isDark(r, col)) ctx.fillRect((col + quiet) * cell, (r + quiet) * cell, cell, cell);
+    return c;
+  }
+
+  function download() {
+    if (!current.url) return;
+    var a = document.createElement('a');
+    a.href = current.url;
+    a.download = current.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    err.style.display = 'none';
+    var text = input.value.trim();
+    if (!text) return;
+    try {
+      var canvas = makeQR(text);
+      var url = canvas.toDataURL('image/png');
+      current.url = url;
+      current.name = 'QR_' + safeFileName(text) + '.png';
+      preview.src = url;
+      label.textContent = current.name;
+      result.style.display = 'block';
+      download();                   // auto-download on Generate / Enter
+    } catch (ex) {
+      result.style.display = 'none';
+      err.textContent = 'Could not generate QR: text may be too long.';
+      err.style.display = 'block';
+    }
+  });
+
+  document.getElementById('dl').addEventListener('click', download);
+</script>
+</body>
+</html>
